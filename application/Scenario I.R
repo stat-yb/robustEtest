@@ -3,9 +3,6 @@ library(gTests)
 library(dplyr)
 library(lubridate)
 library(reshape2)
-library(ggplot2)
-library(gplots)
-library(viridis)
 library(data.table)
 library(energy)
 library(Ecume)
@@ -19,7 +16,6 @@ date_hour = input[, .N, by = .(year, month, day, hour, loc_ind)]
 dates = seq(as.Date(first_date),as.Date(last_date),by="1 day")
 months = month(dates)
 days = day(dates)
-
 # get taxi trips for each hour
 count_hour = list()
 for (h in 0:23) {
@@ -36,6 +32,7 @@ for (h in 0:23) {
     count_h[i, ] = row
   }
   count_hour[[h+1]] = count_h
+  print(h)
 }
 # function to print node degree information, edge-count tests and robust edge-count tests comparing two taxi trips
 get_test_res = function(data1, data2){
@@ -49,50 +46,34 @@ get_test_res = function(data1, data2){
     Ebynode[[E[j,1]]] = c(Ebynode[[E[j,1]]],E[j,2])
     Ebynode[[E[j,2]]] = c(Ebynode[[E[j,2]]],E[j,1])
   }
-  
   nodedeg = rep(0,n)
   for(j in 1:n) nodedeg[j] = length(Ebynode[[j]])
-  
   print(max(nodedeg))
-  print(unlist(g.tests(E, 1:nrow(data1), (nrow(data1)+1):nrow(data), perm = 10000))[c(6, 12)])
-  print(unlist(rg.test(E = E, n1 = nrow(data1), n2 = nrow(data2), weigh.fun = weiMax, perm.num = 10000, test.type = list("gen", "max"))[c(5, 6)]))
-  
+  orit = unlist(g.tests(E, 1:nrow(data1), (nrow(data1)+1):nrow(data), perm = 10000))[c(6, 12)]
+  robt = unlist(rg.test(E = E, n1 = nrow(data1), n2 = nrow(data2), weigh.fun = weiMax, perm.num = 10000, test.type = list("gen", "max"))[c(5, 6)])
+  c(orit, robt)
 }
-# taxi trips from 12 am to 2 pm
-hours = 12:14
-count1 = Reduce("+", count_hour[hours])
-# taxi trips from 4 pm to 7 pm
-hours = 17:19
-count2 = Reduce("+", count_hour[hours])
-# taxi trips in March
-trial = 3
-data1 = count1[months == trial, ]
-data2 = count2[months == trial, ]
 
-# test results for edge-count tests and robust edge-count tests
-get_test_res(data1, data2)
 
-# test results for energy test
+# get taxi trips from 7 am to 8 am
+set.seed(1457)
+count1 = Reduce("+", count_hour[8:10])
+count2 = Reduce("+", count_hour[8:10])
+# taxi trips in September and November
+sp1 = months %in% 9
+sp2 = months %in% 11
+data1 = count1[sp1, ]
+data2 = count2[sp2, ]
+
 data = rbind(data1, data2)
 distances = dist(data, method="manhattan")
-eqdist.etest(distances, sizes=c(nrow(data1), nrow(data2)), distance=TRUE, R = 10000)$p.value
-
-# test results for MMD
-sig = 1/(median(distances)/2) 
-invisible(capture.output(mmd <- mmd_test(as.matrix(data[1:nrow(data1), ]), as.matrix(data[(nrow(data1)+1):(nrow(data1)+nrow(data2)), ]),sigma = sig, iterations = 10^4)))
-mmd$p.value
-
-# restrict the taxi trips before March 20th
-data2 = data2[1:20, ]
-data1 = data1[1:20, ]
 # test results for edge-count tests and robust edge-count tests
-print(get_test_res(data1, data2))
+t1 = get_test_res(data1, data2)
 # test results for energy test
-data = rbind(data1, data2)
-distances = dist(data, method="manhattan")
-print(eqdist.etest(distances, sizes=c(nrow(data1), nrow(data2)), distance=TRUE, R = 10000)$p.value)
+t2 = eqdist.etest(distances, sizes=c(nrow(data1), nrow(data2)), distance=TRUE, R = 10000)$p.value
 # test results for MMD
-sig = 1/(median(distances)/2) 
-invisible(capture.output(mmd <- mmd_test(as.matrix(data[1:nrow(data1), ]), as.matrix(data[(nrow(data1)+1):(nrow(data1)+nrow(data2)), ]),sigma = sig, iterations = 10^4)))
-print(mmd$p.value)
+sig = 1/(median(distances)/2)
+invisible(capture.output(mmd <- mmd_test(as.matrix(data[1:nrow(data1), ]), as.matrix(data[(nrow(data1)+1):(nrow(data1)+nrow(data2)), ]),sigma = sig,iterations = 10000)))
+t3 = mmd$p.value
 
+print(c(t1, t2, t3))
